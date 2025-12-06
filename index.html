@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PsiManager 360 - Acesso Restrito</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>">
+    
+    <!-- Scripts Visuais -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    
+    <!-- FIREBASE (Compatibilidade v9) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #334155; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin: 0 auto; height: 300px; max-height: 400px; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        /* CLASSE DE BLOQUEIO VISUAL */
+        .locked { display: none !important; }
+    </style>
+</head>
+<body class="h-screen overflow-hidden bg-slate-100">
+
+    <!-- 1. TELA DE LOGIN -->
+    <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-800">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md text-center">
+            <div class="text-6xl mb-4">🔒</div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">PsiManager 360</h2>
+            <p class="text-slate-500 text-sm mb-6">Acesso exclusivo: Dra. Marjorie Ricciardi</p>
+            
+            <form id="login-form" class="space-y-4" onsubmit="handleLogin(event)">
+                <input type="email" id="email" placeholder="E-mail" class="w-full p-3 border rounded border-slate-300 focus:outline-none focus:border-sky-500" required>
+                <input type="password" id="password" placeholder="Senha" class="w-full p-3 border rounded border-slate-300 focus:outline-none focus:border-sky-500" required>
+                <button type="submit" id="login-btn" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded transition-colors">
+                    Acessar Sistema
+                </button>
+            </form>
+            <p id="login-error" class="text-red-500 text-xs mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <!-- 2. O SISTEMA -->
+    <div id="app-container" class="flex h-screen locked">
+        
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col z-20 card-shadow">
+            <div class="p-6 border-b border-slate-100">
+                <h1 class="text-xl font-bold text-slate-800">PsiManager<span class="text-sky-600">360</span></h1>
+            </div>
+
+            <div class="p-4 space-y-2">
+                <button onclick="openImportModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded text-sm shadow">📥 Importar Lista</button>
+                <button onclick="exportToCSV()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded text-xs shadow">📊 Excel</button>
+                <button onclick="logout()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 px-4 rounded text-xs">🚪 Sair (Logout)</button>
+            </div>
+            
+            <nav class="flex-1 overflow-y-auto py-2">
+                <ul class="space-y-1">
+                    <li><button onclick="router('dashboard')" id="nav-dashboard" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 active font-medium">📊 Visão Geral</button></li>
+                    <li><button onclick="router('patients')" id="nav-patients" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 font-medium">👥 Pacientes (360°)</button></li>
+                    <li><button onclick="router('alerts')" id="nav-alerts" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 font-medium">⚠️ Alertas</button></li>
+                </ul>
+            </nav>
+            
+            <div class="p-4 border-t border-slate-100 bg-slate-50 text-xs text-slate-500">
+                <p>Logado como:</p>
+                <p id="user-email" class="font-bold text-sky-700 truncate">...</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+            <header class="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center z-10">
+                <h1 class="font-bold text-slate-800">PsiManager</h1>
+                <button onclick="toggleMobileMenu()" class="text-2xl">☰</button>
+            </header>
+
+            <div id="mobile-menu" class="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 hidden md:hidden flex flex-col justify-center items-center space-y-6">
+                <button onclick="toggleMobileMenu()" class="absolute top-4 right-4 text-white text-2xl">✕</button>
+                <button onclick="openImportModal(); toggleMobileMenu()" class="text-emerald-300 text-xl font-bold">📥 Importar Lista</button>
+                <button onclick="logout()" class="text-white text-xl">Sair</button>
+            </div>
+
+            <div id="content-area" class="flex-1 overflow-y-auto p-4 md:p-8">
+                <!-- DASHBOARD -->
+                <section id="view-dashboard" class="fade-in space-y-6">
+                    <h2 class="text-2xl font-bold text-slate-800">Painel de Controle</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-5 rounded border shadow-sm"><div><p class="text-xs font-bold text-slate-400">TOTAL</p><h3 class="text-2xl font-bold text-slate-700" id="kpi-total">...</h3></div></div>
+                        <div class="bg-white p-5 rounded border-l-4 border-sky-500 shadow-sm"><div><p class="text-xs font-bold text-slate-400">AGENDADOS</p><h3 class="text-2xl font-bold text-sky-600" id="kpi-scheduled">...</h3></div></div>
+                        <div class="bg-white p-5 rounded border-l-4 border-amber-400 shadow-sm"><div><p class="text-xs font-bold text-slate-400">FILA PENDENTE</p><h3 class="text-2xl font-bold text-amber-600" id="kpi-pending">...</h3></div></div>
+                        <div class="bg-white p-5 rounded border-l-4 border-slate-500 shadow-sm"><div><p class="text-xs font-bold text-slate-400">INATIVOS</p><h3 class="text-2xl font-bold text-slate-600" id="kpi-inactive">...</h3></div></div>
+                    </div>
+                    
+                    <div class="bg-amber-50 border border-amber-200 rounded overflow-hidden mt-4">
+                        <div class="p-3 bg-amber-100 font-bold text-amber-900 text-sm flex justify-between">
+                            <span>📝 Fila de Agendamento (Secretária)</span>
+                        </div>
+                        <div class="max-h-64 overflow-y-auto bg-white">
+                            <table class="w-full text-left text-sm"><tbody id="scheduling-queue-body"></tbody></table>
+                            <div id="empty-queue-msg" class="p-6 text-center text-slate-400 hidden">Nenhum paciente na fila!</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded border shadow-sm h-80 mt-4"><canvas id="chartStatus"></canvas></div>
+                </section>
+
+                <!-- PATIENTS -->
+                <section id="view-patients" class="hidden fade-in space-y-6">
+                    <div class="flex justify-between items-center"><h2 class="text-2xl font-bold">Pacientes</h2><input type="text" id="patient-search" placeholder="Buscar..." class="border p-2 rounded"></div>
+                    <div class="bg-white rounded border shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-100 text-slate-600 uppercase text-xs"><tr><th class="p-3">Nome</th><th class="p-3">Última</th><th class="p-3">Retorno</th><th class="p-3">Status</th><th class="p-3 text-right">Ação</th></tr></thead>
+                                <tbody id="patients-table-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="p-3 bg-slate-50 text-xs text-slate-500" id="patient-count-footer">...</div>
+                    </div>
+                </section>
+
+                <!-- ALERTS -->
+                <section id="view-alerts" class="hidden fade-in space-y-6">
+                    <h2 class="text-2xl font-bold">Alertas</h2>
+                    <div class="bg-white rounded border shadow-sm p-4">
+                        <h3 class="font-bold text-amber-700 mb-2">⚠️ Atraso > 30 Dias</h3>
+                        <table class="w-full text-sm"><tbody id="alert-30-body"></tbody></table>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL IMPORT -->
+    <div id="modal-import" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded w-full max-w-lg p-6">
+            <h3 class="font-bold text-lg mb-4">Importar Lista Diária</h3>
+            <textarea id="import-text" class="w-full h-32 border p-2 text-xs mb-4 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Cole aqui (ex: RETORNOS 03/12...)"></textarea>
+            <div class="flex justify-end gap-2">
+                <button onclick="document.getElementById('modal-import').classList.add('hidden')" class="px-4 py-2 text-slate-500">Cancelar</button>
+                <button onclick="processImport()" class="px-4 py-2 bg-emerald-600 text-white rounded">Importar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+        <span id="toast-icon">✅</span>
+        <span id="toast-msg">Mensagem</span>
+    </div>
+
+    <script>
+        // CONFIGURAÇÃO FIREBASE (Chaves da Dra. Marjorie)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJ8fwhLOrCjrJWEjTMWaWgcZYSY-p_hbA",
+            authDomain: "psimanager-dramarjorie.firebaseapp.com",
+            projectId: "psimanager-dramarjorie",
+            storageBucket: "psimanager-dramarjorie.firebasestorage.app",
+            messagingSenderId: "1056688238572",
+            appId: "1:1056688238572:web:9cec66bcdaaf23d3b19ac9"
+        };
+
+        // INICIALIZAÇÃO SEGURA
+        try {
+            firebase.initializeApp(firebaseConfig);
+        } catch(e) { console.error(e); }
+
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        let patientData = [];
+        const TODAY = new Date();
+
+        // --- SISTEMA DE LOGIN ---
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                // Usuário logado: Mostra o App
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('locked');
+                document.getElementById('user-email').textContent = user.email;
+                initDataListener(); // Começa a baixar dados
+            } else {
+                // Ninguém logado: Mostra Login
+                document.getElementById('login-screen').classList.remove('hidden');
+                document.getElementById('app-container').classList.add('locked');
+            }
+        });
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            const btn = document.getElementById('login-btn');
+            const errorMsg = document.getElementById('login-error');
+
+            btn.textContent = "Verificando...";
+            btn.disabled = true;
+            errorMsg.classList.add('hidden');
+
+            auth.signInWithEmailAndPassword(email, pass)
+                .catch(error => {
+                    console.error(error);
+                    btn.textContent = "Entrar no Sistema";
+                    btn.disabled = false;
+                    errorMsg.textContent = "Erro: " + error.message;
+                    errorMsg.classList.remove('hidden');
+                });
+        }
+
+        function logout() {
+            auth.signOut();
+            location.reload();
+        }
+
+        // --- SINCRONIZAÇÃO DE DADOS ---
+        function initDataListener() {
+            db.collection("pacientes").onSnapshot(snapshot => {
+                patientData = [];
+                snapshot.forEach(doc => patientData.push({ id: doc.id, ...doc.data() }));
+                renderAll();
+            });
+        }
+
+        // --- FUNÇÕES DO SISTEMA ---
+        function router(view) {
+            document.querySelectorAll('section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-'+view).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-item').forEach(n => {
+                n.classList.remove('active');
+                n.classList.remove('text-sky-600');
+                n.classList.remove('bg-slate-50');
+            });
+            const active = document.getElementById('nav-'+view);
+            active.classList.add('active');
+            active.classList.add('text-sky-600');
+            active.classList.add('bg-slate-50');
+        }
+
+        function openImportModal() { document.getElementById('modal-import').classList.remove('hidden'); }
+        function closeImportModal() { document.getElementById('modal-import').classList.add('hidden'); }
+
+        async function processImport() {
+            const text = document.getElementById('import-text').value;
+            const lines = text.split('\n');
+            
+            // Regex Data
+            const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/;
+            let consultDate = null;
+            for(let i=0; i<5; i++) {
+                if(lines[i] && dateRegex.test(lines[i])) {
+                    const m = lines[i].match(dateRegex);
+                    let y = parseInt(m[3]); if(y<100) y+=2000;
+                    consultDate = new Date(y, parseInt(m[2])-1, parseInt(m[1]));
+                    break;
+                }
+            }
+            if(!consultDate) { alert("Data não encontrada (DD/MM/AAAA) no topo."); return; }
+
+            const rowRegex = /^(\*?)(.*?)(?:[\.\s]*?)HD[:\s]+(.*?)(?:[\.\s]*?)RET(?:.*?)(?:EM)?\s+(.*?)\s*\((?:EM)?\s*(\d+)/i;
+            const batch = db.batch();
+            let count = 0;
+
+            lines.forEach(line => {
+                const match = line.trim().match(rowRegex);
+                if(match) {
+                    let name = match[2].trim();
+                    const cid = match[3].trim();
+                    const retStr = match[4].trim(); // Pega "2M" ou "45d"
+                    const duration = parseInt(match[5]);
+                    
+                    // --- CORREÇÃO DA LÓGICA DE DIAS E MESES ---
+                    let days = 30; // Padrão
+                    const cleanRet = retStr.toLowerCase();
+
+                    if(cleanRet.includes('d')) {
+                        // É DIAS (Ex: 45d, 50 dias)
+                        days = parseInt(cleanRet.replace(/\D/g,'')) || 30;
+                    } else if (cleanRet.includes('m')) {
+                        // É MESES (Ex: 1m, 2 meses)
+                        const months = parseInt(cleanRet.replace(/\D/g,'')) || 1;
+                        days = months * 30;
+                    }
+                    // ------------------------------------------
+                    
+                    const returnDate = new Date(consultDate);
+                    returnDate.setDate(returnDate.getDate() + days);
+                    
+                    // Busca existente localmente para pegar o ID
+                    const existing = patientData.find(p => p.name.replace('*','').trim().toLowerCase() === name.toLowerCase());
+                    const ref = existing ? db.collection("pacientes").doc(existing.id) : db.collection("pacientes").doc();
+                    
+                    if(match[1] === '*' && !name.includes('*')) name = "*"+name;
+
+                    batch.set(ref, {
+                        name: name,
+                        cid: cid,
+                        duration: duration,
+                        lastConsult: consultDate.toISOString().split('T')[0],
+                        returnDue: returnDate.toISOString().split('T')[0],
+                        status: 'Ativo',
+                        schedulingStatus: 'pendente'
+                    }, { merge: true });
+                    count++;
+                }
+            });
+
+            await batch.commit();
+            document.getElementById('modal-import').classList.add('hidden');
+            alert(count + " pacientes sincronizados!");
+        }
+
+        function updateStatus(id, field, value) {
+            db.collection("pacientes").doc(id).update({ [field]: value });
+            // Se mudou para pendente (desmarcou), redireciona visualmente
+            if(field === 'schedulingStatus' && value === 'pendente') {
+                showToast("Voltando para o Painel...", "↩️");
+                setTimeout(() => router('dashboard'), 800);
+            }
+        }
+
+        function exportToCSV() {
+            if(patientData.length === 0) { alert("Sem dados."); return; }
+            const csv = "data:text/csv;charset=utf-8,\uFEFF" + ["ID,Nome,Ultima,Retorno,Status"].join(",") + "\n" + patientData.map(p => [p.id, `"${p.name}"`, p.lastConsult, p.returnDue, p.status].join(",")).join("\n");
+            const link = document.createElement("a"); link.href = encodeURI(csv); link.download = "pacientes.csv"; document.body.appendChild(link); link.click();
+        }
+
+        // --- RENDERERS ---
+        Chart.register(ChartDataLabels);
+
+        function formatDate(s) { if(!s) return '-'; const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; }
+        function getDaysDiff(s) { if(!s) return 999; return Math.ceil((TODAY - new Date(s))/(1000*60*60*24)); }
+        function getReturnDelay(s) { if(!s) return 0; return Math.ceil((TODAY - new Date(s))/(1000*60*60*24)); }
+
+        function renderAll() {
+            const term = document.getElementById('patient-search').value.toLowerCase();
+            const total = patientData.length;
+            const sched = patientData.filter(p => p.schedulingStatus === 'agendado' && p.status !== 'Inativo');
+            const pend = patientData.filter(p => p.schedulingStatus === 'pendente' && p.status !== 'Inativo');
+            const inact = patientData.filter(p => p.status === 'Inativo');
+
+            // KPI
+            document.getElementById('kpi-total').textContent = total;
+            document.getElementById('kpi-scheduled').textContent = sched.length;
+            document.getElementById('kpi-pending').textContent = pend.length;
+            document.getElementById('kpi-inactive').textContent = inact.length;
+
+            // Fila Dashboard
+            const queueBody = document.getElementById('scheduling-queue-body');
+            queueBody.innerHTML = '';
+            if(pend.length === 0) {
+                document.getElementById('empty-queue-msg').classList.remove('hidden');
+            } else {
+                document.getElementById('empty-queue-msg').classList.add('hidden');
+                pend.forEach(p => {
+                    queueBody.innerHTML += `<tr class="border-b hover:bg-amber-50"><td class="p-2">${p.name}</td><td class="p-2 text-slate-500">${formatDate(p.returnDue)}</td><td class="text-right p-2"><button onclick="updateStatus('${p.id}', 'schedulingStatus', 'agendado')" class="bg-emerald-500 text-white px-2 py-1 rounded text-xs">Agendar</button></td></tr>`;
+                });
+            }
+
+            // Tabela 360 (Mantém a busca ao renderizar)
+            const tableBody = document.getElementById('patients-table-body');
+            tableBody.innerHTML = '';
+            patientData.filter(p => p.name.toLowerCase().includes(term)).forEach(p => {
+                let btn = p.schedulingStatus === 'agendado' 
+                    ? `<button onclick="if(confirm('Desmarcar?')) updateStatus('${p.id}', 'schedulingStatus', 'pendente')" class="text-rose-500 border border-rose-200 px-2 py-1 rounded text-xs hover:bg-rose-50">❌ Desmarcou</button>`
+                    : `<button onclick="updateStatus('${p.id}', 'schedulingStatus', 'agendado')" class="text-emerald-500 border border-emerald-200 px-2 py-1 rounded text-xs hover:bg-emerald-50">✅ Agendar</button>`;
+                
+                tableBody.innerHTML += `<tr class="border-b hover:bg-slate-50"><td class="p-3 font-medium">${p.name}</td><td class="p-3">${formatDate(p.returnDue)}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs ${p.schedulingStatus==='agendado'?'bg-sky-100':'bg-amber-100'}">${p.schedulingStatus}</span></td><td class="p-3 text-right">${btn}</td></tr>`;
+            });
+
+            // Alertas
+            const alertBody = document.getElementById('alert-30-body');
+            alertBody.innerHTML = '';
+            const today = new Date();
+            patientData.forEach(p => {
+                if(p.schedulingStatus === 'pendente' && p.status !== 'Inativo') {
+                    const due = new Date(p.returnDue);
+                    const diff = Math.ceil((today - due)/(1000*60*60*24));
+                    if(diff > 30) {
+                        alertBody.innerHTML += `<tr class="border-b"><td class="p-3">${p.name}</td><td class="p-3 text-rose-600 font-bold">${diff} dias atraso</td><td class="text-right p-3"><button onclick="if(confirm('Desistir?')) updateStatus('${p.id}', 'status', 'Inativo')" class="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded">Desistência</button></td></tr>`;
+                    }
+                }
+            });
+
+            updateChart(sched.length, pend.length, inact.length);
+        }
+
+        function updateChart(s, p, i) {
+            const ctx = document.getElementById('chartStatus').getContext('2d');
+            if(window.myChart) window.myChart.destroy();
+            window.myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: ['Agendados', 'Fila', 'Inativos'], datasets: [{ data: [s, p, i], backgroundColor: ['#0ea5e9', '#f59e0b', '#64748b'], borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {position:'bottom'} } }
+            });
+        }
+
+        function showToast(msg, icon) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = msg;
+            document.getElementById('toast-icon').textContent = icon;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => { toast.classList.add('translate-y-20', 'opacity-0'); }, 3000);
+        }
+
+        function toggleMobileMenu() { document.getElementById('mobile-menu').classList.toggle('hidden'); }
+
+        // Init
+        document.getElementById('patient-search').addEventListener('keyup', renderAll);
+        router('dashboard'); // Start on dashboard
+    </script>
+</body>
+</html>
