@@ -3,27 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PsiManager 360 - Gestão de Telemedicina</title>
-    <!-- Favicon para evitar erro 404 no console -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+    <title>PsiManager 360 - Dra. Marjorie Ricciardi</title>
     
+    <!-- Scripts Visuais -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+    <!-- FIREBASE (O Motor da Nuvem) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #334155; }
-        
         .chart-container { position: relative; width: 100%; max-width: 600px; margin: 0 auto; height: 300px; max-height: 400px; }
         @media (min-width: 768px) { .chart-container { height: 350px; } }
-        
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
         .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
         .card-shadow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
         .nav-item.active { background-color: #e0f2fe; color: #0369a1; border-right: 4px solid #0284c7; }
@@ -42,23 +41,13 @@
             <p class="text-xs text-slate-500 mt-1">Gestão de Telemedicina</p>
         </div>
 
-        <!-- ACTION BUTTONS -->
         <div class="p-4 space-y-2">
             <button onclick="openImportModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 text-sm btn-action">
                 <span>📥</span> Importar Lista do Dia
             </button>
-            
             <button onclick="exportToCSV()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 text-xs btn-action">
                 <span>📊</span> Baixar Planilha (Excel)
             </button>
-
-            <button onclick="downloadBackup()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 text-xs btn-action">
-                <span>💾</span> Backup Completo
-            </button>
-            <label for="restore-file" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 text-xs btn-action cursor-pointer">
-                <span>🔄</span> Restaurar Backup
-            </label>
-            <input type="file" id="restore-file" class="hidden" onchange="restoreBackup(this)">
         </div>
         
         <nav class="flex-1 overflow-y-auto py-2">
@@ -66,20 +55,17 @@
                 <li><button onclick="router('dashboard')" id="nav-dashboard" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 transition-colors flex items-center group active"><span class="text-lg mr-3 group-hover:text-sky-600">📊</span> Visão Geral</button></li>
                 <li><button onclick="router('patients')" id="nav-patients" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 transition-colors flex items-center group"><span class="text-lg mr-3 group-hover:text-sky-600">👥</span> Pacientes (360°)</button></li>
                 <li><button onclick="router('alerts')" id="nav-alerts" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 transition-colors flex items-center group"><span class="text-lg mr-3 group-hover:text-slate-500">⚠️</span> Alertas</button></li>
-                
-                <li class="mt-8 pt-4 border-t border-slate-100">
-                    <button onclick="clearAllData()" class="w-full text-left px-6 py-2 text-rose-400 hover:text-rose-600 text-xs flex items-center gap-2">
-                        <span>🗑️</span> Limpar Tudo (Reset)
-                    </button>
-                </li>
             </ul>
         </nav>
         
         <div class="p-4 border-t border-slate-100 bg-slate-50 flex items-center">
-            <div class="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-bold">Dr</div>
+            <div class="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-bold relative">
+                Dr
+                <span id="connection-status" class="absolute bottom-0 right-0 w-3 h-3 bg-red-500 border-2 border-white rounded-full" title="Desconectado"></span>
+            </div>
             <div class="ml-3">
                 <p class="text-sm font-medium text-slate-700">Dra. Marjorie Ricciardi</p>
-                <p class="text-xs text-slate-500">Online • Auto-Save</p>
+                <p class="text-xs text-slate-500" id="status-text">Conectando Nuvem...</p>
             </div>
         </div>
     </aside>
@@ -102,20 +88,20 @@
             
             <!-- DASHBOARD -->
             <section id="view-dashboard" class="fade-in space-y-6">
-                <div class="mb-6"><h2 class="text-2xl font-bold text-slate-800">Painel de Controle</h2><p class="text-slate-500 mt-1">Gestão de agendamentos e status da clínica.</p></div>
+                <div class="mb-6"><h2 class="text-2xl font-bold text-slate-800">Painel de Controle (Nuvem)</h2><p class="text-slate-500 mt-1">Gestão de agendamentos e status da clínica.</p></div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="bg-white p-5 rounded-lg border border-slate-200 card-shadow">
-                        <div class="flex justify-between items-start"><div><p class="text-xs font-semibold text-slate-400 uppercase">Total Pacientes</p><h3 class="text-3xl font-bold text-slate-700 mt-2" id="kpi-total">0</h3></div><span class="text-2xl text-slate-400">📂</span></div>
+                        <div class="flex justify-between items-start"><div><p class="text-xs font-semibold text-slate-400 uppercase">Total Pacientes</p><h3 class="text-3xl font-bold text-slate-700 mt-2" id="kpi-total">...</h3></div><span class="text-2xl text-slate-400">📂</span></div>
                     </div>
                     <div class="bg-white p-5 rounded-lg border border-slate-200 card-shadow border-l-4 border-l-sky-500">
-                        <div class="flex justify-between items-start"><div><p class="text-xs font-semibold text-slate-400 uppercase">Já Agendados</p><h3 class="text-3xl font-bold text-sky-600 mt-2" id="kpi-scheduled">0</h3></div><span class="text-2xl text-sky-500">📅</span></div>
+                        <div class="flex justify-between items-start"><div><p class="text-xs font-semibold text-slate-400 uppercase">Já Agendados</p><h3 class="text-3xl font-bold text-sky-600 mt-2" id="kpi-scheduled">...</h3></div><span class="text-2xl text-sky-500">📅</span></div>
                     </div>
                     <div class="bg-white p-5 rounded-lg border border-slate-200 card-shadow border-l-4 border-l-amber-400">
-                        <div class="flex justify-between items-start"><div><p class="text-xs font-semibold text-slate-400 uppercase">Fila para Agendar</p><h3 class="text-3xl font-bold text-amber-600 mt-2" id="kpi-pending">0</h3></div><span class="text-2xl text-amber-500">⏳</span></div>
+                        <div class="flex justify-between items-start"><div><p class="text-xs font-semibold text-slate-400 uppercase">Fila para Agendar</p><h3 class="text-3xl font-bold text-amber-600 mt-2" id="kpi-pending">...</h3></div><span class="text-2xl text-amber-500">⏳</span></div>
                     </div>
                     <div class="bg-white p-5 rounded-lg border border-slate-200 card-shadow border-l-4 border-l-slate-500">
-                        <div class="flex justify-between items-start"><div><p class="text-xs font-semibold text-slate-400 uppercase">Inativos (>90d)</p><h3 class="text-3xl font-bold text-slate-600 mt-2" id="kpi-inactive">0</h3></div><span class="text-2xl text-slate-500">💤</span></div>
+                        <div class="flex justify-between items-start"><div><p class="text-xs font-semibold text-slate-400 uppercase">Inativos (>90d)</p><h3 class="text-3xl font-bold text-slate-600 mt-2" id="kpi-inactive">...</h3></div><span class="text-2xl text-slate-500">💤</span></div>
                     </div>
                 </div>
 
@@ -142,7 +128,7 @@
                             </tbody>
                         </table>
                         <div id="empty-queue-msg" class="p-8 text-center text-slate-400 hidden">
-                            Nenhum paciente pendente de agendamento! 🎉
+                            Carregando dados da nuvem...
                         </div>
                     </div>
                 </div>
@@ -180,7 +166,7 @@
                             <tbody id="patients-table-body" class="text-sm divide-y divide-slate-100"></tbody>
                         </table>
                     </div>
-                    <div class="p-4 border-t border-slate-200 bg-slate-50 text-xs text-slate-500"><span id="patient-count-footer">0 pacientes</span></div>
+                    <div class="p-4 border-t border-slate-200 bg-slate-50 text-xs text-slate-500"><span id="patient-count-footer">...</span></div>
                 </div>
             </section>
 
@@ -189,7 +175,6 @@
                 <h2 class="text-2xl font-bold text-slate-800">Central de Alertas</h2>
                 <div class="bg-amber-50 rounded-lg border border-amber-200 p-6">
                     <div class="flex items-center gap-3 mb-4"><span class="text-2xl">⚠️</span><h3 class="text-lg font-bold text-amber-800">Atraso de Retorno (> 30 Dias)</h3></div>
-                    <p class="text-sm text-amber-700 mb-4">Pacientes que já deveriam ter retornado e não estão agendados.</p>
                     <div class="bg-white rounded border border-amber-100 overflow-hidden"><table class="w-full text-left"><tbody id="alert-30-body" class="text-sm"></tbody></table></div>
                 </div>
                 <div class="bg-slate-100 rounded-lg border border-slate-200 p-6">
@@ -200,20 +185,20 @@
         </div>
     </main>
 
-    <!-- MODALS -->
+    <!-- MODAL: IMPORT -->
     <div id="modal-import" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-bounce-in">
             <div class="bg-emerald-600 p-4 flex justify-between items-center rounded-t-lg">
-                <h3 class="text-white font-bold text-lg">📥 Importar Lista do Dia</h3>
+                <h3 class="text-white font-bold text-lg">📥 Importar Lista do Dia (Nuvem)</h3>
                 <button onclick="closeImportModal()" class="text-emerald-100 hover:text-white text-2xl">&times;</button>
             </div>
             <div class="p-6 overflow-y-auto flex-1">
-                <p class="text-sm text-slate-600 mb-2">Cole a lista diária abaixo.</p>
+                <p class="text-sm text-slate-600 mb-2">Cole a lista diária. Os dados serão enviados para o banco de dados seguro.</p>
                 <textarea id="import-text" class="w-full h-48 border border-slate-300 rounded-lg p-3 font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="RETORNOS 03/12/2025&#10;&#10;*Nara Carpinelli. HD: F31. RET EM 2M (EM 30')&#10;..."></textarea>
             </div>
             <div class="p-4 border-t border-slate-100 flex justify-end gap-3">
                 <button onclick="closeImportModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">Cancelar</button>
-                <button onclick="processImport()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium shadow btn-action">Processar e Importar</button>
+                <button onclick="processImport()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium shadow btn-action">Enviar para Nuvem</button>
             </div>
         </div>
     </div>
@@ -225,181 +210,57 @@
     </div>
 
     <script>
-        Chart.register(ChartDataLabels);
-        
-        // --- DATA PERSISTENCE ---
-        const DB_KEY = 'psiManagerData_v1';
-        let patientData = [];
+        // --- 1. FIREBASE CONFIGURATION (SUAS CHAVES) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJ8fwhLOrCjrJWEjTMWaWgcZYSY-p_hbA",
+            authDomain: "psimanager-dramarjorie.firebaseapp.com",
+            projectId: "psimanager-dramarjorie",
+            storageBucket: "psimanager-dramarjorie.firebasestorage.app",
+            messagingSenderId: "1056688238572",
+            appId: "1:1056688238572:web:9cec66bcdaaf23d3b19ac9"
+        };
 
-        function loadData() {
-            const stored = localStorage.getItem(DB_KEY);
-            if (stored) {
-                try {
-                    patientData = JSON.parse(stored);
-                } catch(e) {
-                    console.error("Erro ao carregar dados", e);
-                    patientData = [];
-                }
-            } else {
-                patientData = []; 
-            }
-        }
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-        function saveData() {
-            localStorage.setItem(DB_KEY, JSON.stringify(patientData));
-        }
+        // --- 2. LOCAL MIRROR (Data flows from Cloud -> Here -> UI) ---
+        let patientData = []; 
+        const TODAY = new Date();
 
-        // --- BACKUP & EXPORT FUNCTIONS (BLOB FIXED) ---
-        function downloadFile(content, fileName, contentType) {
-            const blob = new Blob([content], { type: contentType });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }
+        // --- 3. REAL-TIME LISTENER (THE MAGIC) ---
+        function initRealTimeConnection() {
+            // Listen to "pacientes" collection
+            db.collection("pacientes").onSnapshot((querySnapshot) => {
+                patientData = []; // Wipe local mirror
+                querySnapshot.forEach((doc) => {
+                    // Add Cloud ID to the object
+                    patientData.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Update UI Status
+                document.getElementById('connection-status').className = "absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full";
+                document.getElementById('status-text').textContent = "Online • Sincronizado";
+                document.getElementById('connection-status').title = "Conectado ao Google Cloud";
 
-        function downloadBackup() {
-            const content = JSON.stringify(patientData);
-            const date = new Date().toISOString().split('T')[0];
-            downloadFile(content, `backup_psi_manager_${date}.json`, 'application/json');
-        }
-
-        function exportToCSV() {
-            if (patientData.length === 0) {
-                alert("Não há dados para exportar.");
-                return;
-            }
-
-            const headers = ["ID", "Paciente", "Ultima_Consulta", "Retorno_Sugerido", "Status", "Situacao_Agenda", "CID", "Duracao_Min"];
-            
-            const rows = patientData.map(p => [
-                p.id,
-                `"${p.name}"`, 
-                p.lastConsult,
-                p.returnDue,
-                p.status,
-                p.schedulingStatus,
-                p.cid,
-                p.duration
-            ]);
-
-            const csvContent = headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
-            const date = new Date().toISOString().split('T')[0];
-            
-            // Add BOM for Excel UTF-8 compatibility
-            downloadFile('\uFEFF' + csvContent, `planilha_pacientes_${date}.csv`, 'text/csv;charset=utf-8;');
-        }
-
-        function restoreBackup(input) {
-            const file = input.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if (Array.isArray(data)) {
-                        patientData = data;
-                        saveData();
-                        renderAll();
-                        alert("Backup restaurado com sucesso!");
-                    } else {
-                        alert("Arquivo inválido.");
-                    }
-                } catch(err) {
-                    alert("Erro ao ler arquivo de backup.");
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        function clearAllData() {
-            if(confirm("ATENÇÃO: Isso apagará TODOS os pacientes e o histórico. Tem certeza absoluta?")) {
-                if(confirm("Última chance: Todos os dados serão perdidos. Confirmar?")) {
-                    patientData = [];
-                    saveData();
-                    renderAll();
-                    alert("Banco de dados limpo.");
-                }
-            }
-        }
-
-        // --- CORE ---
-        const TODAY = new Date(); 
-
-        function getDaysDiff(dateString) {
-            if (!dateString) return 999;
-            const diffTime = TODAY - new Date(dateString);
-            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-
-        function getReturnDelay(returnDueStr) {
-            if (!returnDueStr) return 0;
-            const diffTime = TODAY - new Date(returnDueStr);
-            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        }
-
-        function formatDate(dateStr) {
-            if (!dateStr) return "-";
-            const [y, m, d] = dateStr.split('-');
-            return `${d}/${m}/${y}`;
-        }
-
-        function addDaysToDate(dateObj, days) {
-            const result = new Date(dateObj);
-            result.setDate(result.getDate() + days);
-            return result;
-        }
-
-        function dateToYYYYMMDD(dateObj) {
-            const y = dateObj.getFullYear();
-            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const d = String(dateObj.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        }
-
-        function showToast(msg, icon="✅") {
-            const toast = document.getElementById('toast');
-            document.getElementById('toast-msg').textContent = msg;
-            document.getElementById('toast-icon').textContent = icon;
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => { toast.classList.add('translate-y-20', 'opacity-0'); }, 3000);
-        }
-
-        // --- APP ---
-        function init() {
-            loadData(); // Load from LocalStorage
-            renderAll();
-            document.getElementById('patient-search').addEventListener('keyup', (e) => {
-                const term = e.target.value.toLowerCase();
-                renderPatientTable(term);
+                renderAll(); // Re-render everything with new data
+            }, (error) => {
+                console.error("Erro na conexão:", error);
+                document.getElementById('status-text').textContent = "Erro na Conexão";
+                document.getElementById('connection-status').className = "absolute bottom-0 right-0 w-3 h-3 bg-red-500 border-2 border-white rounded-full";
             });
         }
 
-        function renderAll() {
-            renderKPIs();
-            renderDashboardQueue();
-            renderCharts();
-            const term = document.getElementById('patient-search').value.toLowerCase();
-            renderPatientTable(term);
-            renderAlerts();
-        }
-
-        // IMPORT
-        function openImportModal() { document.getElementById('modal-import').classList.remove('hidden'); }
-        function closeImportModal() { document.getElementById('modal-import').classList.add('hidden'); }
-
-        function processImport() {
+        // --- 4. CLOUD ACTIONS (WRITE TO CLOUD) ---
+        
+        // Import Logic
+        async function processImport() {
             const text = document.getElementById('import-text').value;
             const lines = text.split('\n');
             let consultDate = null;
             let importedCount = 0;
 
             const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/;
-            
             for(let i=0; i<5; i++) {
                 if(lines[i] && dateRegex.test(lines[i])) {
                     const match = lines[i].match(dateRegex);
@@ -410,23 +271,24 @@
                 }
             }
 
-            if (!consultDate) { 
-                alert("Erro: Data não encontrada no cabeçalho (ex: 03/12/2025)."); return; 
-            }
+            if (!consultDate) { alert("Erro: Data não encontrada no cabeçalho."); return; }
 
             const rowRegex = /^(\*?)(.*?)(?:[\.\s]*?)HD[:\s]+(.*?)(?:[\.\s]*?)RET(?:.*?)(?:EM)?\s+(.*?)\s*\((?:EM)?\s*(\d+)/i;
+            const batchPromises = [];
 
-            lines.forEach(line => {
+            for (const line of lines) {
                 const cleanLine = line.trim();
-                if (!cleanLine) return;
+                if (!cleanLine) continue;
                 const match = cleanLine.match(rowRegex);
+                
                 if (match) {
                     const hasAsterisk = match[1] === '*';
-                    const name = match[2].trim();
+                    let name = match[2].trim();
                     const cid = match[3].trim();
                     const retTimeStr = match[4].trim(); 
                     const duration = parseInt(match[5]);
 
+                    // Calculate Return
                     let daysToAdd = 30; 
                     if (retTimeStr.toUpperCase().includes('M')) {
                         const months = parseInt(retTimeStr.replace(/\D/g, '')) || 1;
@@ -435,78 +297,140 @@
                         const days = parseInt(retTimeStr.replace(/\D/g, '')) || 30;
                         daysToAdd = days;
                     }
-                    
                     const returnDueDate = addDaysToDate(consultDate, daysToAdd);
-                    let patient = patientData.find(p => p.name.replace('*','').trim().toLowerCase() === name.toLowerCase());
                     
-                    const newStatusData = {
-                        lastConsult: dateToYYYYMMDD(consultDate),
-                        returnDue: dateToYYYYMMDD(returnDueDate),
-                        cid: cid,
-                        duration: duration,
-                        status: "Ativo",
-                        schedulingStatus: "pendente"
-                    };
+                    // Check if exists in current loaded data
+                    const existing = patientData.find(p => p.name.replace('*','').trim().toLowerCase() === name.replace('*','').trim().toLowerCase());
 
-                    if (patient) {
-                        if(hasAsterisk && !patient.name.includes('*')) patient.name = "*" + patient.name;
-                        Object.assign(patient, newStatusData);
+                    if (existing) {
+                        // Update Existing
+                        if(hasAsterisk && !existing.name.includes('*')) name = "*" + name; // Update name to include * if new
+                        else name = existing.name;
+
+                        batchPromises.push(
+                            db.collection("pacientes").doc(existing.id).update({
+                                lastConsult: dateToYYYYMMDD(consultDate),
+                                returnDue: dateToYYYYMMDD(returnDueDate),
+                                cid: cid,
+                                duration: duration,
+                                status: "Ativo",
+                                schedulingStatus: "pendente",
+                                name: name
+                            })
+                        );
                     } else {
-                        const newId = patientData.length > 0 ? Math.max(...patientData.map(p => p.id)) + 1 : 1;
-                        patientData.push({ id: newId, name: (hasAsterisk ? "*" : "") + name, ...newStatusData });
+                        // Create New
+                        if(hasAsterisk) name = "*" + name;
+                        batchPromises.push(
+                            db.collection("pacientes").add({
+                                name: name,
+                                lastConsult: dateToYYYYMMDD(consultDate),
+                                returnDue: dateToYYYYMMDD(returnDueDate),
+                                cid: cid,
+                                duration: duration,
+                                status: "Ativo",
+                                schedulingStatus: "pendente"
+                            })
+                        );
                     }
                     importedCount++;
                 }
-            });
-
-            if (importedCount > 0) {
-                saveData(); // Save to storage
-                renderAll();
-                closeImportModal();
-                alert(`Sucesso! ${importedCount} pacientes processados.`);
-            } else {
-                alert("Nenhum paciente identificado. Verifique se o texto contém 'HD:' e 'RET EM'.");
             }
+
+            // Execute all updates
+            Promise.all(batchPromises).then(() => {
+                closeImportModal();
+                alert(`Sucesso! ${importedCount} pacientes processados e sincronizados.`);
+            }).catch(err => {
+                alert("Erro ao salvar na nuvem: " + err.message);
+            });
         }
 
-        // ACTIONS
         function markAsScheduled(id) {
-            const p = patientData.find(pat => pat.id === id);
-            if(p) {
-                p.schedulingStatus = 'agendado';
-                saveData();
-                renderAll(); 
-                showToast(`${p.name} agendado!`, "✅");
-            }
+            db.collection("pacientes").doc(id).update({ schedulingStatus: 'agendado' })
+                .then(() => showToast(`Agendado com sucesso!`, "✅"));
         }
 
         function markAsUnscheduled(id) {
-            if(confirm("O paciente desmarcou? Ele voltará para a fila de agendamento no Painel.")) {
-                const p = patientData.find(pat => pat.id === id);
-                if(p) {
-                    p.schedulingStatus = 'pendente';
-                    saveData();
-                    renderAll(); 
-                    showToast(`${p.name} voltou para a fila.`, "↩️");
-                    setTimeout(() => { router('dashboard'); }, 1000); 
-                }
+            if(confirm("O paciente desmarcou? Ele voltará para a fila.")) {
+                // UI feedback instantaneo (opcional, o listener já faz isso rápido)
+                showToast(`Voltando para fila...`, "↩️");
+                
+                db.collection("pacientes").doc(id).update({ schedulingStatus: 'pendente' })
+                    .then(() => {
+                        setTimeout(() => { router('dashboard'); }, 800);
+                    });
             }
         }
 
         function markAsDropout(id) {
-            if(confirm("Confirmar desistência? Será movido para Inativos.")) {
-                const p = patientData.find(pat => pat.id === id);
-                if(p) {
-                    p.status = 'Inativo';
-                    p.schedulingStatus = 'pendente';
-                    saveData();
-                    renderAll();
-                    showToast(`${p.name} movido para Inativos.`, "🚫");
-                }
+            if(confirm("Confirmar desistência? Mover para Inativos.")) {
+                db.collection("pacientes").doc(id).update({ status: 'Inativo', schedulingStatus: 'pendente' })
+                    .then(() => showToast(`Movido para Inativos.`, "🚫"));
             }
         }
 
-        // RENDERERS
+        // --- 5. EXPORT (READ FROM LOCAL MIRROR) ---
+        function exportToCSV() {
+            if (patientData.length === 0) { alert("Sem dados para exportar."); return; }
+            const headers = ["ID_Nuvem", "Paciente", "Ultima_Consulta", "Retorno_Sugerido", "Status", "Situacao_Agenda", "CID", "Duracao_Min"];
+            const rows = patientData.map(p => [ p.id, `"${p.name}"`, p.lastConsult, p.returnDue, p.status, p.schedulingStatus, p.cid, p.duration ]);
+            const csvContent = headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `PsiManager_Export_${dateToYYYYMMDD(TODAY)}.csv`;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        // --- HELPERS ---
+        function getDaysDiff(dateString) {
+            if (!dateString) return 999;
+            const diffTime = TODAY - new Date(dateString);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+        function getReturnDelay(returnDueStr) {
+            if (!returnDueStr) return 0;
+            const diffTime = TODAY - new Date(returnDueStr);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+        function formatDate(dateStr) {
+            if (!dateStr) return "-";
+            const [y, m, d] = dateStr.split('-');
+            return `${d}/${m}/${y}`;
+        }
+        function addDaysToDate(dateObj, days) {
+            const result = new Date(dateObj);
+            result.setDate(result.getDate() + days);
+            return result;
+        }
+        function dateToYYYYMMDD(dateObj) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        function showToast(msg, icon) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = msg;
+            document.getElementById('toast-icon').textContent = icon;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => { toast.classList.add('translate-y-20', 'opacity-0'); }, 3000);
+        }
+
+        // --- RENDERERS (SAME AS BEFORE) ---
+        Chart.register(ChartDataLabels);
+
+        function renderAll() {
+            renderKPIs();
+            renderDashboardQueue();
+            renderCharts();
+            const term = document.getElementById('patient-search').value.toLowerCase();
+            renderPatientTable(term);
+            renderAlerts();
+        }
+
         function renderDashboardQueue() {
             const tbody = document.getElementById('scheduling-queue-body');
             const emptyMsg = document.getElementById('empty-queue-msg');
@@ -514,20 +438,13 @@
             const queue = patientData.filter(p => p.schedulingStatus === 'pendente' && p.status !== 'Inativo');
 
             if (queue.length === 0) {
-                emptyMsg.classList.remove('hidden');
+                emptyMsg.classList.remove('hidden'); emptyMsg.textContent = "Nenhum paciente pendente! 🎉";
             } else {
                 emptyMsg.classList.add('hidden');
                 queue.forEach(p => {
                     const row = document.createElement('tr');
                     row.className = "hover:bg-amber-50 transition-colors";
-                    row.innerHTML = `
-                        <td class="p-4 font-medium text-slate-800">${p.name}</td>
-                        <td class="p-4 font-bold text-slate-600">${formatDate(p.returnDue)}</td>
-                        <td class="p-4 text-slate-500">${formatDate(p.lastConsult)}</td>
-                        <td class="p-4 text-right">
-                            <button onclick="markAsScheduled(${p.id})" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow btn-action">✅ Já Agendei</button>
-                        </td>
-                    `;
+                    row.innerHTML = `<td class="p-4 font-medium text-slate-800">${p.name}</td><td class="p-4 font-bold text-slate-600">${formatDate(p.returnDue)}</td><td class="p-4 text-slate-500">${formatDate(p.lastConsult)}</td><td class="p-4 text-right"><button onclick="markAsScheduled('${p.id}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow btn-action">✅ Já Agendei</button></td>`;
                     tbody.appendChild(row);
                 });
             }
@@ -539,7 +456,6 @@
             const pending = patientData.filter(p => p.schedulingStatus === 'pendente' && p.status !== 'Inativo').length;
             let inactive90 = 0;
             patientData.forEach(p => { if (p.status === 'Inativo' || getDaysDiff(p.lastConsult) > 90) inactive90++; });
-
             document.getElementById('kpi-total').textContent = total;
             document.getElementById('kpi-scheduled').textContent = scheduled;
             document.getElementById('kpi-pending').textContent = pending;
@@ -550,37 +466,23 @@
             const tbody = document.getElementById('patients-table-body');
             tbody.innerHTML = '';
             const filteredData = patientData.filter(p => p.name.toLowerCase().includes(filterTerm));
+            document.getElementById('patient-count-footer').textContent = `${filteredData.length} pacientes`;
 
             filteredData.forEach(p => {
                 const daysAbsent = getDaysDiff(p.lastConsult);
                 let displayStatus = p.status;
                 if (daysAbsent > 90) displayStatus = "Inativo";
-                
                 let statusBadge = displayStatus === 'Ativo' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600';
-                let scheduleBadge = p.schedulingStatus === 'agendado' 
-                    ? '<span class="px-2 py-1 rounded bg-sky-100 text-sky-700 text-xs font-bold">Agendado</span>' 
-                    : '<span class="px-2 py-1 rounded bg-amber-100 text-amber-700 text-xs font-bold">Pendente</span>';
-
-                let actionBtn;
-                if (p.schedulingStatus === 'agendado') {
-                    actionBtn = `<button onclick="markAsUnscheduled(${p.id})" class="text-rose-500 hover:text-rose-700 text-xs font-bold border border-rose-200 hover:bg-rose-50 px-2 py-1 rounded btn-action">❌ Desmarcou</button>`;
-                } else {
-                    actionBtn = `<button onclick="markAsScheduled(${p.id})" class="text-emerald-600 hover:text-emerald-700 text-xs font-bold border border-emerald-200 hover:bg-emerald-50 px-2 py-1 rounded btn-action">✅ Agendar</button>`;
-                }
+                let scheduleBadge = p.schedulingStatus === 'agendado' ? '<span class="px-2 py-1 rounded bg-sky-100 text-sky-700 text-xs font-bold">Agendado</span>' : '<span class="px-2 py-1 rounded bg-amber-100 text-amber-700 text-xs font-bold">Pendente</span>';
+                let actionBtn = p.schedulingStatus === 'agendado' 
+                    ? `<button onclick="markAsUnscheduled('${p.id}')" class="text-rose-500 hover:text-rose-700 text-xs font-bold border border-rose-200 hover:bg-rose-50 px-2 py-1 rounded btn-action">❌ Desmarcou</button>` 
+                    : `<button onclick="markAsScheduled('${p.id}')" class="text-emerald-600 hover:text-emerald-700 text-xs font-bold border border-emerald-200 hover:bg-emerald-50 px-2 py-1 rounded btn-action">✅ Agendar</button>`;
 
                 const row = document.createElement('tr');
                 row.className = "hover:bg-slate-50 border-b border-slate-100 last:border-0";
-                row.innerHTML = `
-                    <td class="p-4 font-medium text-slate-800">${p.name}<div class="text-xs text-slate-400">CID: ${p.cid || '-'} • ${p.duration || '?'} min</div></td>
-                    <td class="p-4 text-slate-600">${formatDate(p.lastConsult)}</td>
-                    <td class="p-4 text-slate-800 font-medium">${formatDate(p.returnDue)}</td>
-                    <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${statusBadge}">${displayStatus}</span></td>
-                    <td class="p-4">${scheduleBadge}</td>
-                    <td class="p-4 text-right">${actionBtn}</td>
-                `;
+                row.innerHTML = `<td class="p-4 font-medium text-slate-800">${p.name}<div class="text-xs text-slate-400">CID: ${p.cid || '-'} • ${p.duration || '?'} min</div></td><td class="p-4 text-slate-600">${formatDate(p.lastConsult)}</td><td class="p-4 text-slate-800 font-medium">${formatDate(p.returnDue)}</td><td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${statusBadge}">${displayStatus}</span></td><td class="p-4">${scheduleBadge}</td><td class="p-4 text-right">${actionBtn}</td>`;
                 tbody.appendChild(row);
             });
-            document.getElementById('patient-count-footer').textContent = `${filteredData.length} pacientes`;
         }
 
         function renderCharts() {
@@ -591,15 +493,11 @@
                 else if (p.schedulingStatus === 'pendente') pendingCount++;
                 else activeScheduledCount++;
             });
-
             if(window.myStatusChart) window.myStatusChart.destroy();
             const ctxStatus = document.getElementById('chartStatus').getContext('2d');
             window.myStatusChart = new Chart(ctxStatus, {
                 type: 'doughnut',
-                data: {
-                    labels: ['Agendados/Em dia', 'Fila Pendente', 'Inativos'],
-                    datasets: [{ data: [activeScheduledCount, pendingCount, inactiveCount], backgroundColor: ['#0ea5e9', '#f59e0b', '#64748b'], borderWidth: 0 }]
-                },
+                data: { labels: ['Agendados/Em dia', 'Fila Pendente', 'Inativos'], datasets: [{ data: [activeScheduledCount, pendingCount, inactiveCount], backgroundColor: ['#0ea5e9', '#f59e0b', '#64748b'], borderWidth: 0 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, datalabels: { color: '#fff', font: {weight:'bold'}, formatter: (v) => v || '' } } }
             });
         }
@@ -608,14 +506,13 @@
             const list30 = document.getElementById('alert-30-body');
             const list90 = document.getElementById('alert-90-body');
             list30.innerHTML = ''; list90.innerHTML = '';
-
             patientData.forEach(p => {
                 const daysAbsent = getDaysDiff(p.lastConsult);
                 const delay = getReturnDelay(p.returnDue);
                 if (p.status === 'Inativo' || daysAbsent > 90) {
                     list90.innerHTML += `<tr class="border-b border-slate-200 hover:bg-white"><td class="p-3 font-medium text-slate-700">${p.name}</td><td class="p-3 font-bold text-slate-600">${daysAbsent > 90 ? daysAbsent + ' dias ausente' : 'Inativo Manual'}</td></tr>`;
                 } else if (delay > 30 && p.schedulingStatus === 'pendente') {
-                    list30.innerHTML += `<tr class="border-b border-amber-100 hover:bg-white"><td class="p-3 font-medium">${p.name}</td><td class="p-3 text-slate-500">${formatDate(p.returnDue)}</td><td class="p-3 font-bold text-amber-600">${delay} dias atraso</td><td class="p-3 text-right"><button onclick="markAsDropout(${p.id})" class="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded hover:bg-rose-200 font-bold">🚫 Desistência</button></td></tr>`;
+                    list30.innerHTML += `<tr class="border-b border-amber-100 hover:bg-white"><td class="p-3 font-medium">${p.name}</td><td class="p-3 text-slate-500">${formatDate(p.returnDue)}</td><td class="p-3 font-bold text-amber-600">${delay} dias atraso</td><td class="p-3 text-right"><button onclick="markAsDropout('${p.id}')" class="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded hover:bg-rose-200 font-bold">🚫 Desistência</button></td></tr>`;
                 }
             });
         }
@@ -628,6 +525,8 @@
         }
         function toggleMobileMenu() { document.getElementById('mobile-menu').classList.toggle('hidden'); }
 
+        // Start
+        initRealTimeConnection();
         init();
     </script>
 </body>
