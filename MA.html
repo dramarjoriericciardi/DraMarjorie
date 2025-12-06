@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PsiManager 360 - Gestão de Telemedicina</title>
+    <!-- Favicon para evitar erro 404 no console -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -45,7 +48,6 @@
                 <span>📥</span> Importar Lista do Dia
             </button>
             
-            <!-- NEW: EXPORT TO SHEETS -->
             <button onclick="exportToCSV()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 text-xs btn-action">
                 <span>📊</span> Baixar Planilha (Excel)
             </button>
@@ -247,16 +249,23 @@
             localStorage.setItem(DB_KEY, JSON.stringify(patientData));
         }
 
-        // --- BACKUP & EXPORT FUNCTIONS ---
+        // --- BACKUP & EXPORT FUNCTIONS (BLOB FIXED) ---
+        function downloadFile(content, fileName, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
         function downloadBackup() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(patientData));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
+            const content = JSON.stringify(patientData);
             const date = new Date().toISOString().split('T')[0];
-            downloadAnchorNode.setAttribute("download", `backup_psi_manager_${date}.json`);
-            document.body.appendChild(downloadAnchorNode); 
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
+            downloadFile(content, `backup_psi_manager_${date}.json`, 'application/json');
         }
 
         function exportToCSV() {
@@ -265,13 +274,11 @@
                 return;
             }
 
-            // Define Headers
             const headers = ["ID", "Paciente", "Ultima_Consulta", "Retorno_Sugerido", "Status", "Situacao_Agenda", "CID", "Duracao_Min"];
             
-            // Map Data to CSV Format
             const rows = patientData.map(p => [
                 p.id,
-                `"${p.name}"`, // Quote name to handle commas
+                `"${p.name}"`, 
                 p.lastConsult,
                 p.returnDue,
                 p.status,
@@ -280,19 +287,11 @@
                 p.duration
             ]);
 
-            // Combine
-            const csvContent = "data:text/csv;charset=utf-8," 
-                + headers.join(",") + "\n" 
-                + rows.map(e => e.join(",")).join("\n");
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            const csvContent = headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
             const date = new Date().toISOString().split('T')[0];
-            link.setAttribute("download", `planilha_pacientes_${date}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            
+            // Add BOM for Excel UTF-8 compatibility
+            downloadFile('\uFEFF' + csvContent, `planilha_pacientes_${date}.csv`, 'text/csv;charset=utf-8;');
         }
 
         function restoreBackup(input) {
@@ -632,5 +631,4 @@
         init();
     </script>
 </body>
-
 </html>
