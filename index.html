@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PsiManager 360 - Acesso Restrito</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #334155; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin: 0 auto; height: 300px; max-height: 400px; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .locked { display: none !important; }
+    </style>
+</head>
+<body class="h-screen overflow-hidden bg-slate-100">
+
+    <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-800">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md text-center">
+            <div class="text-6xl mb-4">🔒</div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">PsiManager 360</h2>
+            <p class="text-slate-500 text-sm mb-6">Acesso exclusivo: Dra. Marjorie Ricciardi</p>
+            <form id="login-form" class="space-y-4" onsubmit="handleLogin(event)">
+                <input type="email" id="email" placeholder="E-mail" class="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-sky-500" required>
+                <input type="password" id="password" placeholder="Senha" class="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-sky-500" required>
+                <button type="submit" id="login-btn" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 rounded">Acessar</button>
+            </form>
+            <p id="login-error" class="text-red-500 text-xs mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <div id="app-container" class="flex h-screen locked">
+        <aside class="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col z-20 shadow-lg">
+            <div class="p-6 border-b border-slate-100">
+                <h1 class="text-xl font-bold text-slate-800">PsiManager<span class="text-sky-600">360</span></h1>
+            </div>
+            <div class="p-4 space-y-2">
+                <button onclick="openImportModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded text-sm shadow">📥 Importar Lista</button>
+                <button onclick="exportToCSV()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded text-xs shadow">📊 Excel</button>
+                <button onclick="logout()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 px-4 rounded text-xs">🚪 Sair</button>
+            </div>
+            <nav class="flex-1 overflow-y-auto py-2">
+                <ul class="space-y-1">
+                    <li><button onclick="router('dashboard')" id="nav-dashboard" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 font-medium active">📊 Visão Geral</button></li>
+                    <li><button onclick="router('patients')" id="nav-patients" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 font-medium">👥 Pacientes (360°)</button></li>
+                    <li><button onclick="router('alerts')" id="nav-alerts" class="nav-item w-full text-left px-6 py-3 text-slate-600 hover:bg-slate-50 font-medium">⚠️ Alertas</button></li>
+                </ul>
+            </nav>
+            <div class="p-4 border-t border-slate-100 bg-slate-50 text-xs text-slate-500">
+                <p>Logado como:</p><p id="user-email" class="font-bold text-sky-700 truncate">...</p>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+            <header class="md:hidden bg-white border-b border-slate-200 p-4 flex justify-between items-center z-10">
+                <h1 class="font-bold text-slate-800">PsiManager</h1>
+                <button onclick="toggleMobileMenu()" class="text-2xl">☰</button>
+            </header>
+
+            <div id="mobile-menu" class="fixed inset-0 bg-slate-800 bg-opacity-90 z-50 hidden md:hidden flex flex-col justify-center items-center space-y-6">
+                <button onclick="toggleMobileMenu()" class="absolute top-4 right-4 text-white text-2xl">✕</button>
+                <button onclick="openImportModal()" class="text-emerald-300 text-xl font-bold">📥 Importar Lista</button>
+                <button onclick="logout()" class="text-white text-xl">Sair</button>
+            </div>
+
+            <div id="content-area" class="flex-1 overflow-y-auto p-4 md:p-8">
+
+                <section id="view-dashboard" class="fade-in space-y-6">
+                    <h2 class="text-2xl font-bold text-slate-800">Painel de Controle</h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-5 rounded border shadow-sm"><div><p class="text-xs font-bold text-slate-400">TOTAL</p><h3 class="text-2xl font-bold text-slate-700" id="kpi-total">...</h3></div></div>
+                        <div class="bg-white p-5 rounded border-l-4 border-sky-500 shadow-sm"><div><p class="text-xs font-bold text-slate-400">AGENDADOS</p><h3 class="text-2xl font-bold text-sky-600" id="kpi-scheduled">...</h3></div></div>
+                        <div class="bg-white p-5 rounded border-l-4 border-amber-400 shadow-sm"><div><p class="text-xs font-bold text-slate-400">FILA PENDENTE</p><h3 class="text-2xl font-bold text-amber-600" id="kpi-pending">...</h3></div></div>
+                        <div class="bg-white p-5 rounded border-l-4 border-slate-500 shadow-sm"><div><p class="text-xs font-bold text-slate-400">INATIVOS</p><h3 class="text-2xl font-bold text-slate-600" id="kpi-inactive">...</h3></div></div>
+                    </div>
+
+                    <div class="bg-amber-50 border border-amber-200 rounded overflow-hidden mt-4">
+                        <div class="p-3 bg-amber-100 font-bold text-amber-900 text-sm flex flex-col md:flex-row justify-between items-start md:items-center">
+                            <span>📝 Fila de Agendamento</span>
+                            <span class="text-xs bg-amber-200 text-amber-800 px-2 py-1 rounded mt-1 md:mt-0 font-normal">Data exibida = Retorno Sugerido</span>
+                        </div>
+                        <div class="max-h-64 overflow-y-auto bg-white">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-amber-50 text-amber-800 text-xs uppercase sticky top-0">
+                                    <tr><th class="p-3">Paciente</th><th class="p-3">Retorno Sugerido</th><th class="p-3">Última Consulta</th><th class="p-3 text-right">Ação</th></tr>
+                                </thead>
+                                <tbody id="scheduling-queue-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded border shadow-sm h-80 mt-4"><canvas id="chartStatus"></canvas></div>
+                </section>
+
+                <section id="view-patients" class="hidden fade-in space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold">Pacientes</h2>
+                        <input type="text" id="patient-search" placeholder="Buscar..." class="border p-2 rounded">
+                    </div>
+
+                    <div class="bg-white rounded border shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-100 text-slate-600 uppercase text-xs border-b">
+                                    <tr>
+                                        <th class="p-3 cursor-pointer select-none" onclick="toggleSortByName()">Paciente ⬍</th>
+                                        <th class="p-3">Última Consulta</th>
+                                        <th class="p-3">Retorno Ideal</th>
+                                        <th class="p-3">Status</th>
+                                        <th class="p-3">Agenda</th>
+                                        <th class="p-3 text-right">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="patients-table-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="p-3 bg-slate-50 text-xs text-slate-500" id="patient-count-footer">...</div>
+                    </div>
+                </section>
+
+                <section id="view-alerts" class="hidden fade-in space-y-6">
+                    <h2 class="text-2xl font-bold">Alertas</h2>
+                    <div class="bg-white rounded border shadow-sm p-4">
+                        <h3 class="font-bold text-amber-700 mb-2">⚠️ Atraso > 30 Dias</h3>
+                        <table class="w-full text-sm"><tbody id="alert-30-body"></tbody></table>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-import" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded w-full max-w-lg p-6">
+            <h3 class="font-bold text-lg mb-4">Importar Lista Diária</h3>
+            <textarea id="import-text" class="w-full h-32 border p-2 text-xs mb-4"></textarea>
+            <div class="flex justify-end gap-2">
+                <button onclick="document.getElementById('modal-import').classList.add('hidden')" class="px-4 py-2 text-slate-500">Cancelar</button>
+                <button onclick="processImport()" class="px-4 py-2 bg-emerald-600 text-white rounded">Importar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 right-4 bg-slate-800 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+        <span id="toast-icon">✅</span><span id="toast-msg">Mensagem</span>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJ8fwhLOrCjrJWEjTMWaWgcZYSY-p_hbA",
+            authDomain: "psimanager-dramarjorie.firebaseapp.com",
+            projectId: "psimanager-dramarjorie",
+            storageBucket: "psimanager-dramarjorie.firebasestorage.app",
+            messagingSenderId: "1056688238572",
+            appId: "1:1056688238572:web:9cec66bcdaaf23d3b19ac9"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let patientData = [];
+        let sortPatientsBy = "lastConsult";
+        let sortDirection = "desc";
+        const TODAY = new Date();
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('locked');
+                document.getElementById('user-email').textContent = user.email;
+                initData();
+            } else {
+                document.getElementById('login-screen').classList.remove('hidden');
+                document.getElementById('app-container').classList.add('locked');
+            }
+        });
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('login-btn');
+            btn.textContent = "Verificando..."; 
+            btn.disabled = true;
+            auth.signInWithEmailAndPassword(
+                document.getElementById('email').value,
+                document.getElementById('password').value
+            ).catch(err => { 
+                btn.textContent = "Acessar"; 
+                btn.disabled = false; 
+                document.getElementById('login-error').textContent = "Erro: " + err.message; 
+                document.getElementById('login-error').classList.remove('hidden'); 
+            });
+        }
+
+        function logout() { 
+            auth.signOut(); 
+            window.location.reload(); 
+        }
+
+        function initData() {
+            db.collection("pacientes").onSnapshot(snap => {
+                patientData = [];
+                snap.forEach(doc => patientData.push({ id: doc.id, ...doc.data() }));
+                renderAll();
+            });
+        }
+
+        function openImportModal() {
+            document.getElementById('modal-import').classList.remove('hidden');
+        }
+
+        async function processImport() {
+            const text = document.getElementById('import-text').value;
+            const lines = text.split('\n');
+            let consultDate = null;
+            let importedCount = 0;
+
+            const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/;
+            for(let i=0; i<5; i++) {
+                if(lines[i] && dateRegex.test(lines[i])) {
+                    const m = lines[i].match(dateRegex);
+                    let y = parseInt(m[3]); if(y<100) y+=2000;
+                    consultDate = new Date(y, parseInt(m[2])-1, parseInt(m[1]));
+                    break;
+                }
+            }
+            if(!consultDate) { alert("Data não encontrada"); return; }
+
+            const rowRegex = /^(\*?)(.*?)(?:[\.\s]*?)HD[:\s]+(.*?)(?:[\.\s]*?)RET(?:.*?)(?:EM)?\s+(.*?)\s*\((?:EM)?\s*(\d+)/i;
+            const batch = db.batch();
+
+            for (const line of lines) {
+                const cleanLine = line.trim();
+                if(!cleanLine) continue;
+                const match = cleanLine.match(rowRegex);
+                
+                if(match) {
+                    let name = match[2].trim();
+                    const hasAsterisk = match[1] === '*';
+                    const cid = match[3].trim();
+                    const retRaw = match[4].trim(); 
+                    const duration = parseInt(match[5]);
+
+                    let cleanRet = retRaw.toLowerCase().replace(/\bem\b/g, ''); 
+                    let num = parseInt(cleanRet.replace(/\D/g,'')) || 1;
+                    let daysToAdd = 30;
+
+                    if (cleanRet.includes('d')) daysToAdd = num;
+                    else if (cleanRet.includes('m')) daysToAdd = num * 30;
+                    else daysToAdd = num > 12 ? num : num * 30;
+
+                    const returnDate = new Date(consultDate);
+                    returnDate.setDate(returnDate.getDate() + daysToAdd);
+
+                    const existing = patientData.find(p => 
+                        p.name.replace('*','').trim().toLowerCase() === 
+                        name.replace('*','').trim().toLowerCase()
+                    );
+
+                    const ref = existing 
+                        ? db.collection("pacientes").doc(existing.id) 
+                        : db.collection("pacientes").doc();
+                    
+                    if(hasAsterisk && !name.includes('*')) name = "*"+name;
+                    else if(existing) name = existing.name;
+
+                    batch.set(ref, {
+                        name: name,
+                        cid: cid,
+                        duration: duration,
+                        lastConsult: dateToYYYYMMDD(consultDate),
+                        returnDue: dateToYYYYMMDD(returnDate),
+                        status: 'Ativo',
+                        schedulingStatus: 'pendente'
+                    }, { merge: true });
+
+                    importedCount++;
+                }
+            }
+            await batch.commit();
+            document.getElementById('modal-import').classList.add('hidden');
+            alert(importedCount + " pacientes importados!");
+        }
+
+        function updateStatus(id, field, val) {
+            db.collection("pacientes").doc(id).update({ [field]: val });
+        }
+
+        function exportToCSV() {
+            const csv = "data:text/csv;charset=utf-8,\uFEFF" + 
+                ["ID,Nome,Ultima,Retorno,Status"].join(",") + "\n" + 
+                patientData.map(p => 
+                    [p.id, `"${p.name}"`, p.lastConsult, p.returnDue, p.status].join(",")
+                ).join("\n");
+            const link = document.createElement("a"); 
+            link.href = encodeURI(csv); 
+            link.download = "pacientes.csv"; 
+            document.body.appendChild(link); 
+            link.click();
+        }
+
+        Chart.register(ChartDataLabels);
+
+        function dateToYYYYMMDD(d) { return d.toISOString().split('T')[0]; }
+
+        function formatDate(s) {
+            if(!s) return '-'; 
+            const [y,m,d] = s.split('-'); 
+            return `${d}/${m}/${y}`;
+        }
+
+        function getDaysDiff(s) {
+            if(!s) return 999; 
+            return Math.ceil((TODAY - new Date(s))/(1000*60*60*24));
+        }
+
+        function getReturnDelay(s) {
+            if(!s) return 0; 
+            return Math.ceil((TODAY - new Date(s))/(1000*60*60*24));
+        }
+
+        function toggleSortByName() {
+            if (sortPatientsBy !== "name") {
+                sortPatientsBy = "name";
+                sortDirection = "asc";
+            } else {
+                sortDirection = sortDirection === "asc" ? "desc" : "asc";
+            }
+            renderAll();
+        }
+
+        function renderAll() {
+            const term = document.getElementById('patient-search').value.toLowerCase();
+
+            let filtered = patientData.filter(p => 
+                p.name.toLowerCase().includes(term)
+            );
+
+            if (sortPatientsBy === "lastConsult") {
+                filtered.sort((a, b) => new Date(b.lastConsult) - new Date(a.lastConsult));
+            } else if (sortPatientsBy === "name") {
+                filtered.sort((a, b) =>
+                    sortDirection === "asc"
+                        ? a.name.localeCompare(b.name)
+                        : b.name.localeCompare(a.name)
+                );
+            }
+
+            const sched = patientData.filter(p => p.schedulingStatus === 'agendado' && p.status !== 'Inativo');
+            const pend = patientData.filter(p => p.schedulingStatus === 'pendente' && p.status !== 'Inativo');
+            const inact = patientData.filter(p => p.status === 'Inativo' || getDaysDiff(p.lastConsult) > 90);
+
+            document.getElementById('kpi-total').textContent = patientData.length;
+            document.getElementById('kpi-scheduled').textContent = sched.length;
+            document.getElementById('kpi-pending').textContent = pend.length;
+            document.getElementById('kpi-inactive').textContent = inact.length;
+
+            const qBody = document.getElementById('scheduling-queue-body');
+            qBody.innerHTML = '';
+            pend.forEach(p => {
+                qBody.innerHTML += `
+                    <tr class="border-b hover:bg-amber-50">
+                        <td class="p-3 font-medium">${p.name}</td>
+                        <td class="p-3 font-bold text-slate-600">${formatDate(p.returnDue)}</td>
+                        <td class="p-3 text-slate-500">${formatDate(p.lastConsult)}</td>
+                        <td class="text-right p-3">
+                            <button onclick="updateStatus('${p.id}','schedulingStatus','agendado')" 
+                                class="bg-emerald-500 text-white px-3 py-1 rounded text-xs shadow hover:bg-emerald-600 font-bold">
+                                Agendar
+                            </button>
+                        </td>
+                    </tr>`;
+            });
+
+            const tBody = document.getElementById('patients-table-body');
+            tBody.innerHTML = '';
+            document.getElementById('patient-count-footer').textContent = filtered.length + ' pacientes';
+
+            filtered.forEach(p => {
+                const daysAbsent = getDaysDiff(p.lastConsult);
+                let status = p.status;
+                if(daysAbsent > 90) status = "Inativo";
+                
+                const btn = p.schedulingStatus === 'agendado' 
+                    ? `<button onclick="updateStatus('${p.id}','schedulingStatus','pendente')" class="text-rose-600 border border-rose-200 px-2 py-1 rounded text-xs font-bold hover:bg-rose-50">❌ Desmarcou</button>`
+                    : `<button onclick="updateStatus('${p.id}','schedulingStatus','agendado')" class="text-emerald-600 border border-emerald-200 px-2 py-1 rounded text-xs font-bold hover:bg-emerald-50">✅ Agendar</button>`;
+                
+                const schedBadge = p.schedulingStatus === 'agendado'
+                    ? '<span class="bg-sky-100 text-sky-700 px-2 py-1 rounded text-xs font-bold">Agendado</span>'
+                    : '<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold">Pendente</span>';
+
+                const statusBadge = status === 'Ativo'
+                    ? '<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Ativo</span>'
+                    : '<span class="bg-slate-200 text-slate-600 px-2 py-1 rounded text-xs font-bold">Inativo</span>';
+
+                tBody.innerHTML += `
+                    <tr class="border-b hover:bg-slate-50">
+                        <td class="p-3 font-medium">${p.name}<div class="text-xs text-slate-400">CID: ${p.cid}</div></td>
+                        <td class="p-3 text-slate-600">${formatDate(p.lastConsult)}</td>
+                        <td class="p-3 font-bold text-slate-800">${formatDate(p.returnDue)}</td>
+                        <td class="p-3">${statusBadge}</td>
+                        <td class="p-3">${schedBadge}</td>
+                        <td class="p-3 text-right">${btn}</td>
+                    </tr>`;
+            });
+
+            const aBody = document.getElementById('alert-30-body');
+            aBody.innerHTML = '';
+            patientData.forEach(p => {
+                const delay = getReturnDelay(p.returnDue);
+                if(delay > 30 && p.schedulingStatus === 'pendente' && p.status !== 'Inativo') {
+                    aBody.innerHTML += `
+                        <tr class="border-b hover:bg-amber-50">
+                            <td class="p-3 font-medium">${p.name}</td>
+                            <td class="p-3 text-slate-500">${formatDate(p.returnDue)}</td>
+                            <td class="p-3 font-bold text-amber-600">${delay} dias atraso</td>
+                            <td class="text-right p-3">
+                                <button onclick="updateStatus('${p.id}','status','Inativo')" 
+                                    class="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded font-bold hover:bg-rose-200">
+                                    Desistência
+                                </button>
+                            </td>
+                        </tr>`;
+                }
+            });
+
+            updateChart(sched.length, pend.length, inact.length);
+        }
+
+        function updateChart(s, p, i) {
+            const ctx = document.getElementById('chartStatus').getContext('2d');
+            if(window.myChart) window.myChart.destroy();
+
+            window.myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { 
+                    labels: ['Agendados', 'Pendente', 'Inativos'], 
+                    datasets: [{
+                        data: [s, p, i], 
+                        backgroundColor: ['#0ea5e9', '#f59e0b', '#64748b'], 
+                        borderWidth: 0 
+                    }] 
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: {position:'bottom'} } 
+                }
+            });
+        }
+
+        function router(view) {
+            document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+            document.getElementById('view-'+view).classList.remove('hidden');
+            document.querySelectorAll('.nav-item').forEach(n => { 
+                n.classList.remove('active', 'text-sky-600', 'bg-slate-50'); 
+            });
+            document.getElementById('nav-'+view).classList.add('active', 'text-sky-600', 'bg-slate-50');
+            if(window.innerWidth < 768) document.getElementById('mobile-menu').classList.add('hidden');
+        }
+
+        function toggleMobileMenu() { 
+            document.getElementById('mobile-menu').classList.toggle('hidden'); 
+        }
+
+        document.getElementById('patient-search').addEventListener('keyup', renderAll);
+    </script>
+</body>
+</html>
